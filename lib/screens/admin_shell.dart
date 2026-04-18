@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'admin_dashboard_view.dart';
 import 'admin_orders_page.dart';
+import 'admin_staff_page.dart';
+import 'admin_report_page.dart';
 
 class AdminShell extends StatefulWidget {
   const AdminShell({super.key});
@@ -16,8 +18,8 @@ class _AdminShellState extends State<AdminShell> {
   final List<Widget> _pages = [
     const AdminDashboardPage(),
     const AdminOrdersPage(),
-    const Center(child: Text('Staff Management (Coming Soon)')),
-    const Center(child: Text('Settings (Coming Soon)')),
+    const AdminStaffPage(),
+    const AdminReportPage(),
   ];
 
   @override
@@ -86,7 +88,7 @@ class _AdminShellState extends State<AdminShell> {
             _navItem(Icons.grid_view_rounded, 'DASHBOARD', 0, isPhone),
             _navItem(Icons.local_laundry_service_outlined, 'ORDERS', 1, isPhone),
             _navItem(Icons.people_outline, 'STAFF', 2, isPhone),
-            _navItem(Icons.settings_outlined, 'SETTINGS', 3, isPhone),
+            _navItem(Icons.assessment_outlined, 'REPORTS', 3, isPhone),
           ],
         ),
       ),
