@@ -2,9 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import '../models/app_data.dart';
 
 class AdminDashboardPage extends StatefulWidget {
-  const AdminDashboardPage({super.key});
+  final AppState appState;
+  final VoidCallback onRefresh;
+
+  const AdminDashboardPage({super.key, required this.appState, required this.onRefresh});
 
   @override
   State<AdminDashboardPage> createState() => _AdminDashboardPageState();
@@ -13,16 +18,46 @@ class AdminDashboardPage extends StatefulWidget {
 class _AdminDashboardPageState extends State<AdminDashboardPage> {
   String _selectedPeriod = 'Mingguan';
 
+  AppState get _state => widget.appState;
+
   String _formatCurrency(double value) {
     final formatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
     return formatter.format(value);
+  }
+
+  void _handleLogout() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text('Logout', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+        content: Text('Apakah Anda yakin ingin keluar?', style: GoogleFonts.inter()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Batal', style: GoogleFonts.inter(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.pushReplacementNamed(context, '/');
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFD32F2F),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text('Logout', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isPhone = screenWidth < 600;
-
 
     return SafeArea(
       child: SingleChildScrollView(
@@ -69,7 +104,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   ),
 
                 const SizedBox(height: 120),
-              ],
+              ].animate(interval: 30.ms).fade(duration: 300.ms, curve: Curves.easeOut).scale(begin: const Offset(0.9, 0.9), curve: Curves.easeOutBack, duration: 400.ms),
             ),
           ),
         ),
@@ -93,7 +128,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'LaundryFlow',
+                  'LaundryKu',
                   style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w800, color: const Color(0xFF0D47A1)),
                 ),
                 Text(
@@ -104,13 +139,29 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
             ),
           ],
         ),
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.white, shape: BoxShape.circle,
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: const Icon(Icons.notifications_none_rounded, color: Color(0xFF0D47A1), size: 24),
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white, shape: BoxShape.circle,
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: const Icon(Icons.notifications_none_rounded, color: Color(0xFF0D47A1), size: 24),
+            ),
+            const SizedBox(width: 12),
+            GestureDetector(
+              onTap: _handleLogout,
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFEBEE), shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFFFCDD2)),
+                ),
+                child: const Icon(Icons.logout_rounded, color: Color(0xFFD32F2F), size: 22),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -118,21 +169,26 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
   // ==================== SUMMARY CARDS ====================
   Widget _buildSummaryCards(bool isPhone) {
+    final todayIncome = _state.todayIncome;
+    final activeOrders = _state.activeOrders;
+    final backlog = _state.backlog;
+    final totalCustomers = _state.totalCustomers;
+
     return Column(
       children: [
         Row(
           children: [
-            Expanded(child: _summaryCard('Pendapatan Hari Ini', _formatCurrency(2850000), Icons.account_balance_wallet_outlined, const Color(0xFFE3F2FD), const Color(0xFF1565C0), '+18%')),
+            Expanded(child: _summaryCard('Pendapatan Hari Ini', _formatCurrency(todayIncome), Icons.account_balance_wallet_outlined, const Color(0xFFE3F2FD), const Color(0xFF1565C0), todayIncome > 0 ? '+${(todayIncome / 1000).toInt()}K' : '0')),
             const SizedBox(width: 12),
-            Expanded(child: _summaryCard('Pesanan Aktif', '24', Icons.receipt_long_outlined, const Color(0xFFFFF3E0), const Color(0xFFE65100), '+5')),
+            Expanded(child: _summaryCard('Pesanan Aktif', '$activeOrders', Icons.receipt_long_outlined, const Color(0xFFFFF3E0), const Color(0xFFE65100), '+$activeOrders')),
           ],
         ),
         const SizedBox(height: 12),
         Row(
           children: [
-            Expanded(child: _summaryCard('Backlog', '8', Icons.warning_amber_rounded, const Color(0xFFFFEBEE), const Color(0xFFD32F2F), '-3')),
+            Expanded(child: _summaryCard('Backlog', '$backlog', Icons.warning_amber_rounded, const Color(0xFFFFEBEE), const Color(0xFFD32F2F), backlog > 0 ? '-$backlog' : '0')),
             const SizedBox(width: 12),
-            Expanded(child: _summaryCard('Pelanggan Baru', '5', Icons.person_add_outlined, const Color(0xFFE8F5E9), const Color(0xFF2E7D32), '+2')),
+            Expanded(child: _summaryCard('Total Pelanggan', '$totalCustomers', Icons.person_add_outlined, const Color(0xFFE8F5E9), const Color(0xFF2E7D32), '+$totalCustomers')),
           ],
         ),
       ],
@@ -161,21 +217,25 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: badge.startsWith('+') ? const Color(0xFFE8F5E9) : const Color(0xFFFFEBEE),
+                  color: badge.startsWith('+') ? const Color(0xFFE8F5E9) : (badge.startsWith('-') ? const Color(0xFFFFEBEE) : const Color(0xFFF5F5F5)),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   badge,
                   style: GoogleFonts.inter(
                     fontSize: 10, fontWeight: FontWeight.bold,
-                    color: badge.startsWith('+') ? const Color(0xFF2E7D32) : const Color(0xFFD32F2F),
+                    color: badge.startsWith('+') ? const Color(0xFF2E7D32) : (badge.startsWith('-') ? const Color(0xFFD32F2F) : Colors.grey),
                   ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 14),
-          Text(value, style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w900, color: const Color(0xFF1A1C2E))),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(value, style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w900, color: const Color(0xFF1A1C2E))),
+          ),
           const SizedBox(height: 4),
           Text(label, style: GoogleFonts.inter(fontSize: 12, color: Colors.grey.shade500)),
         ],
@@ -298,7 +358,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
             lineTouchData: LineTouchData(
               touchTooltipData: LineTouchTooltipData(
                 getTooltipItems: (spots) => spots.map((s) => LineTooltipItem(
-                  _selectedPeriod == 'Mingguan' ? _formatCurrency(s.y * 1000000) : _formatCurrency(s.y * 1000000),
+                  _formatCurrency(s.y * 1000000),
                   GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                 )).toList(),
               ),
@@ -311,13 +371,26 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
   // ==================== PIE CHART ====================
   Widget _buildStatusPieChart() {
-    final statusData = [
-      {'label': 'Antrian', 'value': 8.0, 'color': const Color(0xFF42A5F5)},
-      {'label': 'Proses', 'value': 6.0, 'color': const Color(0xFFFFA726)},
-      {'label': 'Pencucian', 'value': 4.0, 'color': const Color(0xFFEF5350)},
-      {'label': 'Pengeringan', 'value': 3.0, 'color': const Color(0xFFAB47BC)},
-      {'label': 'Siap Ambil', 'value': 3.0, 'color': const Color(0xFF66BB6A)},
-    ];
+    final dist = _state.statusDistribution;
+
+    final colorMap = {
+      'Belum Bayar': const Color(0xFFEF5350),
+      'Proses': const Color(0xFFFFA726),
+      'Cuci': const Color(0xFF42A5F5),
+      'Keringkan': const Color(0xFFAB47BC),
+      'Setrika': const Color(0xFF26A69A),
+      'Siap Ambil': const Color(0xFF66BB6A),
+    };
+
+    final statusData = dist.entries.map((e) => {
+      'label': e.key,
+      'value': e.value.toDouble(),
+      'color': colorMap[e.key] ?? Colors.grey,
+    }).toList();
+
+    if (statusData.isEmpty) {
+      statusData.add({'label': 'Tidak ada data', 'value': 1.0, 'color': Colors.grey.shade300});
+    }
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -365,20 +438,17 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
   // ==================== RECENT ORDERS ====================
   Widget _buildRecentOrders() {
-    final orders = [
-      {'name': 'Amanda Rizky', 'service': 'Express', 'status': 'Pencucian', 'time': '10:45', 'img': 'https://i.pravatar.cc/150?u=1'},
-      {'name': 'David Wilson', 'service': 'Regular', 'status': 'Antrian', 'time': '10:12', 'img': 'https://i.pravatar.cc/150?u=2'},
-      {'name': 'Sarah Johnson', 'service': 'Dry Clean', 'status': 'Siap Ambil', 'time': '09:55', 'img': 'https://i.pravatar.cc/150?u=3'},
-      {'name': 'Michael Tan', 'service': 'Express', 'status': 'Pengeringan', 'time': '09:30', 'img': 'https://i.pravatar.cc/150?u=4'},
-    ];
+    final orders = _state.recentOrders;
 
     Color statusColor(String s) {
       switch (s) {
-        case 'Antrian': return const Color(0xFF42A5F5);
+        case 'Belum Bayar': return const Color(0xFFEF5350);
         case 'Proses': return const Color(0xFFFFA726);
-        case 'Pencucian': return const Color(0xFFEF5350);
-        case 'Pengeringan': return const Color(0xFFAB47BC);
+        case 'Cuci': return const Color(0xFF42A5F5);
+        case 'Keringkan': return const Color(0xFFAB47BC);
+        case 'Setrika': return const Color(0xFF26A69A);
         case 'Siap Ambil': return const Color(0xFF66BB6A);
+        case 'Selesai': return const Color(0xFF2E7D32);
         default: return Colors.grey;
       }
     }
@@ -397,45 +467,65 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('Pesanan Terbaru', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.bold, color: const Color(0xFF1A1C2E))),
-              Text('4 aktif', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF0D47A1))),
+              Text('${_state.activeOrders} aktif', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF0D47A1))),
             ],
           ),
           const SizedBox(height: 16),
-          ...orders.map((o) => Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFBFDFF),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              children: [
-                CircleAvatar(radius: 22, backgroundImage: NetworkImage(o['img']!)),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          if (orders.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              child: Center(
+                child: Text('Belum ada pesanan', style: GoogleFonts.inter(color: Colors.grey.shade400)),
+              ),
+            )
+          else
+            ...orders.map((o) => Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFBFDFF),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 44, height: 44,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE3F2FD),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Center(
+                      child: Text(
+                        o.customer.isNotEmpty ? o.customer[0].toUpperCase() : '?',
+                        style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFF0D47A1)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(o.customer, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: const Color(0xFF1A1C2E))),
+                        Text(o.service, style: GoogleFonts.inter(fontSize: 12, color: Colors.grey.shade500)),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text(o['name']!, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: const Color(0xFF1A1C2E))),
-                      Text(o['service']!, style: GoogleFonts.inter(fontSize: 12, color: Colors.grey.shade500)),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(color: statusColor(o.status).withAlpha(30), borderRadius: BorderRadius.circular(8)),
+                        child: Text(o.status, style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: statusColor(o.status))),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(_formatCurrency(o.price.toDouble()), style: GoogleFonts.inter(fontSize: 11, color: Colors.grey.shade400)),
                     ],
                   ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(color: statusColor(o['status']!).withAlpha(30), borderRadius: BorderRadius.circular(8)),
-                      child: Text(o['status']!, style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: statusColor(o['status']!))),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(o['time']!, style: GoogleFonts.inter(fontSize: 11, color: Colors.grey.shade400)),
-                  ],
-                ),
-              ],
-            ),
-          )),
+                ],
+              ),
+            )),
         ],
       ),
     );

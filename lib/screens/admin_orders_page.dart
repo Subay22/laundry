@@ -1,12 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import '../models/app_data.dart';
 
 class AdminOrdersPage extends StatefulWidget {
-  const AdminOrdersPage({super.key});
+  final AppState appState;
+  final Function(OrderData) onAddOrder;
+  final Function(OrderData) onDeleteOrder;
+  final VoidCallback onRefresh;
+
+  const AdminOrdersPage({
+    super.key,
+    required this.appState,
+    required this.onAddOrder,
+    required this.onDeleteOrder,
+    required this.onRefresh,
+  });
 
   @override
   State<AdminOrdersPage> createState() => _AdminOrdersPageState();
@@ -14,23 +27,39 @@ class AdminOrdersPage extends StatefulWidget {
 
 class _AdminOrdersPageState extends State<AdminOrdersPage> {
   String _selectedFilter = 'Semua';
+  String _searchQuery = '';
+  final TextEditingController _searchCtrl = TextEditingController();
 
-  final List<Map<String, dynamic>> _orders = [
-    {'id': 'LF-98231-X', 'customer': 'Budi Santoso', 'service': 'Express', 'weight': 3.5, 'price': 52500, 'status': 'Proses', 'pic': 'Sarah Jenkins', 'date': '2026-04-17'},
-    {'id': 'LF-77210-B', 'customer': 'Anita Wijaya', 'service': 'Regular', 'weight': 5.0, 'price': 50000, 'status': 'Selesai', 'pic': 'Marcus Chen', 'date': '2026-04-16'},
-    {'id': 'LF-55421-Z', 'customer': 'Rian Pratama', 'service': 'Dry Clean', 'weight': 2.0, 'price': 60000, 'status': 'Selesai', 'pic': 'Sarah Jenkins', 'date': '2026-04-16'},
-    {'id': 'LF-44102-A', 'customer': 'Dewi Lestari', 'service': 'Express', 'weight': 4.0, 'price': 60000, 'status': 'Belum Bayar', 'pic': 'David Miller', 'date': '2026-04-15'},
-    {'id': 'LF-33891-C', 'customer': 'Ahmad Fauzi', 'service': 'Regular', 'weight': 7.5, 'price': 75000, 'status': 'Proses', 'pic': 'Elena Rodriguez', 'date': '2026-04-15'},
-    {'id': 'LF-22780-D', 'customer': 'Siti Rahayu', 'service': 'Premium', 'weight': 3.0, 'price': 90000, 'status': 'Selesai', 'pic': 'Marcus Chen', 'date': '2026-04-14'},
-  ];
+  List<OrderData> get _filteredOrders {
+    var list = widget.appState.orders.toList();
 
-  List<Map<String, dynamic>> get _filteredOrders {
-    if (_selectedFilter == 'Semua') return _orders;
-    return _orders.where((o) => o['status'] == _selectedFilter).toList();
+    // Apply filter
+    if (_selectedFilter != 'Semua') {
+      list = list.where((o) => o.status == _selectedFilter).toList();
+    }
+
+    // Apply search
+    if (_searchQuery.isNotEmpty) {
+      final q = _searchQuery.toLowerCase();
+      list = list.where((o) =>
+        o.id.toLowerCase().contains(q) ||
+        o.customer.toLowerCase().contains(q) ||
+        o.service.toLowerCase().contains(q) ||
+        o.pic.toLowerCase().contains(q)
+      ).toList();
+    }
+
+    return list;
   }
 
   String _formatCurrency(double value) {
     return NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0).format(value);
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   // ==================== NEW ORDER SHEET ====================
@@ -39,6 +68,10 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
     final weightCtrl = TextEditingController();
     final customerCtrl = TextEditingController();
     DateTime estimatedDate = DateTime.now().add(const Duration(days: 2));
+
+    // Build PIC list from staff
+    final staffNames = widget.appState.staffList.map((s) => s.name).toList();
+    String selectedPIC = staffNames.isNotEmpty ? staffNames.first : 'Admin';
 
     showModalBottomSheet(
       context: context,
@@ -95,6 +128,24 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
                   _sheetInput(Icons.scale_outlined, 'Contoh: 3.5', controller: weightCtrl, isNumber: true),
                   const SizedBox(height: 20),
 
+                  // PIC Staff dropdown
+                  if (staffNames.isNotEmpty) ...[
+                    _sheetLabel('PIC STAFF'),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(color: const Color(0xFFF1F4F9), borderRadius: BorderRadius.circular(16)),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          isExpanded: true,
+                          value: selectedPIC,
+                          items: staffNames.map((n) => DropdownMenuItem(value: n, child: Text(n, style: GoogleFonts.inter(fontSize: 14)))).toList(),
+                          onChanged: (v) => setModalState(() => selectedPIC = v!),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
                   _sheetLabel('ESTIMASI SELESAI'),
                   GestureDetector(
                     onTap: () async {
@@ -119,29 +170,47 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
                     width: double.infinity, height: 60,
                     child: ElevatedButton(
                       onPressed: () {
-                        if (customerCtrl.text.isNotEmpty && weightCtrl.text.isNotEmpty) {
-                          final w = double.tryParse(weightCtrl.text) ?? 0;
-                          setState(() {
-                            _orders.insert(0, {
-                              'id': 'LF-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}-N',
-                              'customer': customerCtrl.text,
-                              'service': selectedService,
-                              'weight': w,
-                              'price': (w * 15000).toInt(),
-                              'status': 'Belum Bayar',
-                              'pic': 'Admin',
-                              'date': DateFormat('yyyy-MM-dd').format(DateTime.now()),
-                            });
-                          });
-                          Navigator.pop(ctx);
+                        if (customerCtrl.text.isEmpty) {
                           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text('Order baru berhasil ditambahkan!', style: GoogleFonts.inter()),
-                            backgroundColor: const Color(0xFF2E7D32),
+                            content: Text('Nama pelanggan wajib diisi!', style: GoogleFonts.inter()),
+                            backgroundColor: Colors.redAccent,
                             behavior: SnackBarBehavior.floating,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                             margin: const EdgeInsets.all(16),
                           ));
+                          return;
                         }
+                        if (weightCtrl.text.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text('Berat wajib diisi!', style: GoogleFonts.inter()),
+                            backgroundColor: Colors.redAccent,
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            margin: const EdgeInsets.all(16),
+                          ));
+                          return;
+                        }
+                        final w = double.tryParse(weightCtrl.text) ?? 0;
+                        final pricePerKg = selectedService == 'Express' ? 15000 : (selectedService == 'Dry Clean' ? 30000 : (selectedService == 'Satuan' ? 20000 : 7000));
+
+                        widget.onAddOrder(OrderData(
+                          id: 'LF-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}-N',
+                          customer: customerCtrl.text,
+                          service: selectedService,
+                          weight: w,
+                          price: (w * pricePerKg).toInt(),
+                          status: 'Belum Bayar',
+                          pic: selectedPIC,
+                          date: DateFormat('yyyy-MM-dd').format(DateTime.now()),
+                        ));
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text('Order baru berhasil ditambahkan!', style: GoogleFonts.inter()),
+                          backgroundColor: const Color(0xFF2E7D32),
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          margin: const EdgeInsets.all(16),
+                        ));
                       },
                       style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0D47A1), foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
                       child: Text('Tambah Order', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.bold)),
@@ -157,9 +226,9 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
   }
 
   // ==================== ORDER DETAIL + STATUS UPDATE ====================
-  void _showOrderDetail(Map<String, dynamic> order) {
+  void _showOrderDetail(OrderData order) {
     final statuses = ['Belum Bayar', 'Proses', 'Cuci', 'Keringkan', 'Setrika', 'Siap Ambil', 'Selesai'];
-    int currentIdx = statuses.indexOf(order['status']);
+    int currentIdx = statuses.indexOf(order.status);
     if (currentIdx < 0) currentIdx = 0;
 
     showModalBottomSheet(
@@ -183,13 +252,14 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
             ),
             const SizedBox(height: 20),
 
-            _detailRow('Barcode ID', order['id']),
-            _detailRow('Customer', order['customer']),
-            _detailRow('Layanan', order['service']),
-            _detailRow('Berat', '${order['weight']} kg'),
-            _detailRow('Harga', _formatCurrency((order['price'] as int).toDouble())),
-            _detailRow('Status', order['status']),
-            _detailRow('PIC Staff', order['pic']),
+            _detailRow('Barcode ID', order.id),
+            _detailRow('Customer', order.customer),
+            _detailRow('Layanan', order.service),
+            _detailRow('Berat', '${order.weight} kg'),
+            _detailRow('Harga', _formatCurrency(order.price.toDouble())),
+            _detailRow('Status', order.status),
+            _detailRow('PIC Staff', order.pic),
+            _detailRow('Tanggal', order.date),
 
             const SizedBox(height: 24),
             if (currentIdx < statuses.length - 1)
@@ -197,7 +267,8 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
                 width: double.infinity, height: 56,
                 child: ElevatedButton.icon(
                   onPressed: () {
-                    setState(() => order['status'] = statuses[currentIdx + 1]);
+                    order.status = statuses[currentIdx + 1];
+                    widget.onRefresh();
                     Navigator.pop(ctx);
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                       content: Text('Status diubah ke: ${statuses[currentIdx + 1]}', style: GoogleFonts.inter()),
@@ -213,17 +284,72 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
                 ),
               ),
             const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity, height: 56,
-              child: OutlinedButton.icon(
-                onPressed: () => _printReceipt(order),
-                icon: const Icon(Icons.print_outlined, size: 20),
-                label: Text('Cetak Struk', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
-                style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFF0D47A1), side: const BorderSide(color: Color(0xFF0D47A1)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18))),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 56,
+                    child: OutlinedButton.icon(
+                      onPressed: () => _printReceipt(order),
+                      icon: const Icon(Icons.print_outlined, size: 20),
+                      label: Text('Cetak Struk', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+                      style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFF0D47A1), side: const BorderSide(color: Color(0xFF0D47A1)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18))),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 56,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _confirmDeleteOrder(order);
+                    },
+                    icon: const Icon(Icons.delete_outline_rounded, size: 20),
+                    label: Text('Hapus', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD32F2F), foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18))),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _confirmDeleteOrder(OrderData order) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text('Hapus Pesanan', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+        content: Text('Yakin ingin menghapus pesanan ${order.id} (${order.customer})?', style: GoogleFonts.inter()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Batal', style: GoogleFonts.inter(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              widget.onDeleteOrder(order);
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text('Pesanan ${order.id} dihapus', style: GoogleFonts.inter()),
+                backgroundColor: const Color(0xFFD32F2F),
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                margin: const EdgeInsets.all(16),
+              ));
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFD32F2F),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text('Hapus', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+          ),
+        ],
       ),
     );
   }
@@ -235,14 +361,14 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: GoogleFonts.inter(fontSize: 13, color: Colors.grey.shade500)),
-          Text(value, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFF1A1C2E))),
+          Flexible(child: Text(value, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFF1A1C2E)), textAlign: TextAlign.end)),
         ],
       ),
     );
   }
 
   // ==================== PRINT RECEIPT ====================
-  Future<void> _printReceipt(Map<String, dynamic> order) async {
+  Future<void> _printReceipt(OrderData order) async {
     final pdf = pw.Document();
     pdf.addPage(
       pw.Page(
@@ -250,18 +376,18 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
         build: (pw.Context context) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.center,
           children: [
-            pw.Text('LaundryFlow', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+            pw.Text('LaundryKu', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
             pw.Text('STRUK TRANSAKSI', style: const pw.TextStyle(fontSize: 10)),
             pw.Divider(),
             pw.SizedBox(height: 8),
-            _pdfRow('Barcode', order['id']),
-            _pdfRow('Customer', order['customer']),
-            _pdfRow('Layanan', order['service']),
-            _pdfRow('Berat', '${order['weight']} kg'),
-            _pdfRow('Harga', _formatCurrency((order['price'] as int).toDouble())),
-            _pdfRow('Status', order['status']),
-            _pdfRow('PIC', order['pic']),
-            _pdfRow('Tanggal', order['date']),
+            _pdfRow('Barcode', order.id),
+            _pdfRow('Customer', order.customer),
+            _pdfRow('Layanan', order.service),
+            _pdfRow('Berat', '${order.weight} kg'),
+            _pdfRow('Harga', _formatCurrency(order.price.toDouble())),
+            _pdfRow('Status', order.status),
+            _pdfRow('PIC', order.pic),
+            _pdfRow('Tanggal', order.date),
             pw.SizedBox(height: 8),
             pw.Divider(),
             pw.SizedBox(height: 8),
@@ -332,13 +458,30 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
                     const SizedBox(height: 24),
                     _buildActiveOrdersHeader(),
                     const SizedBox(height: 16),
-                    ...(_filteredOrders.map((o) => _OrderCard(
-                      order: o,
-                      onTap: () => _showOrderDetail(o),
-                      formatCurrency: _formatCurrency,
-                    ))),
+                    if (_filteredOrders.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 48),
+                        child: Center(
+                          child: Column(
+                            children: [
+                              Icon(Icons.inbox_rounded, size: 64, color: Colors.grey.shade300),
+                              const SizedBox(height: 12),
+                              Text(
+                                _searchQuery.isNotEmpty ? 'Tidak ditemukan hasil untuk "$_searchQuery"' : 'Tidak ada pesanan',
+                                style: GoogleFonts.inter(color: Colors.grey.shade400, fontSize: 14),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else
+                      ...(_filteredOrders.map((o) => _OrderCard(
+                        order: o,
+                        onTap: () => _showOrderDetail(o),
+                        formatCurrency: _formatCurrency,
+                      ))),
                     const SizedBox(height: 120),
-                  ],
+                  ].animate(interval: 30.ms).fade(duration: 300.ms, curve: Curves.easeOut).scale(begin: const Offset(0.9, 0.9), curve: Curves.easeOutBack, duration: 400.ms),
                 ),
               ),
             ),
@@ -359,7 +502,7 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
             const CircleAvatar(radius: 22, backgroundImage: NetworkImage('https://i.pravatar.cc/150?u=admin')),
             const SizedBox(width: 12),
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('LaundryFlow', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w800, color: const Color(0xFF0D47A1))),
+              Text('LaundryKu', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w800, color: const Color(0xFF0D47A1))),
               Text('ADMIN PORTAL', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade500, letterSpacing: 1.2)),
             ]),
           ]),
@@ -389,17 +532,28 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(color: const Color(0xFFF1F4F9), borderRadius: BorderRadius.circular(20)),
       child: TextField(
+        controller: _searchCtrl,
+        onChanged: (v) => setState(() => _searchQuery = v),
         decoration: InputDecoration(
-          icon: Icon(Icons.qr_code_scanner_rounded, color: Colors.grey.shade400),
-          hintText: 'Search barcode or name...', hintStyle: GoogleFonts.inter(color: Colors.grey.shade400, fontSize: 14),
+          icon: Icon(Icons.search_rounded, color: Colors.grey.shade400),
+          hintText: 'Cari barcode, nama, layanan...', hintStyle: GoogleFonts.inter(color: Colors.grey.shade400, fontSize: 14),
           border: InputBorder.none, contentPadding: const EdgeInsets.symmetric(vertical: 16),
+          suffixIcon: _searchQuery.isNotEmpty
+              ? IconButton(
+                  onPressed: () {
+                    _searchCtrl.clear();
+                    setState(() => _searchQuery = '');
+                  },
+                  icon: Icon(Icons.close_rounded, color: Colors.grey.shade400, size: 20),
+                )
+              : null,
         ),
       ),
     );
   }
 
   Widget _buildFilterChips() {
-    final filters = ['Semua', 'Belum Bayar', 'Proses', 'Selesai'];
+    final filters = ['Semua', 'Belum Bayar', 'Proses', 'Cuci', 'Siap Ambil', 'Selesai'];
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
@@ -439,14 +593,14 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
 
 // ==================== ORDER CARD ====================
 class _OrderCard extends StatelessWidget {
-  final Map<String, dynamic> order;
+  final OrderData order;
   final VoidCallback onTap;
   final String Function(double) formatCurrency;
 
   const _OrderCard({required this.order, required this.onTap, required this.formatCurrency});
 
   Color get _statusBg {
-    switch (order['status']) {
+    switch (order.status) {
       case 'Belum Bayar': return const Color(0xFFFFEBEE);
       case 'Proses': return const Color(0xFFFFF3E0);
       case 'Cuci': return const Color(0xFFE3F2FD);
@@ -459,7 +613,7 @@ class _OrderCard extends StatelessWidget {
   }
 
   Color get _statusText {
-    switch (order['status']) {
+    switch (order.status) {
       case 'Belum Bayar': return const Color(0xFFD32F2F);
       case 'Proses': return const Color(0xFFE65100);
       case 'Cuci': return const Color(0xFF1565C0);
@@ -489,27 +643,29 @@ class _OrderCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('BARCODE ID', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade400, letterSpacing: 1.1)),
-                  Text(order['id'], style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w900, color: const Color(0xFF1A1C1E))),
-                ]),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('BARCODE ID', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade400, letterSpacing: 1.1)),
+                    Text(order.id, style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w900, color: const Color(0xFF1A1C1E))),
+                  ]),
+                ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(color: _statusBg, borderRadius: BorderRadius.circular(12)),
-                  child: Text((order['status'] as String).toUpperCase(), style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w900, color: _statusText)),
+                  child: Text(order.status.toUpperCase(), style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w900, color: _statusText)),
                 ),
               ],
             ),
             const SizedBox(height: 20),
             Row(children: [
-              Expanded(child: _info('CUSTOMER', order['customer'])),
-              Expanded(child: _info('PIC STAFF', order['pic'])),
+              Expanded(child: _info('CUSTOMER', order.customer)),
+              Expanded(child: _info('PIC STAFF', order.pic)),
             ]),
             const SizedBox(height: 12),
             Row(children: [
-              Expanded(child: _info('LAYANAN', order['service'])),
-              Expanded(child: _info('BERAT', '${order['weight']} kg')),
-              Expanded(child: _info('HARGA', formatCurrency((order['price'] as int).toDouble()))),
+              Expanded(child: _info('LAYANAN', order.service)),
+              Expanded(child: _info('BERAT', '${order.weight} kg')),
+              Expanded(child: _info('HARGA', formatCurrency(order.price.toDouble()))),
             ]),
           ],
         ),

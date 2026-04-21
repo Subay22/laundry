@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../models/app_data.dart';
 import 'admin_dashboard_view.dart';
 import 'admin_orders_page.dart';
 import 'admin_staff_page.dart';
 import 'admin_report_page.dart';
 
 class AdminShell extends StatefulWidget {
-  const AdminShell({super.key});
+  final AppState appState;
+
+  const AdminShell({super.key, required this.appState});
 
   @override
   State<AdminShell> createState() => _AdminShellState();
@@ -14,19 +17,65 @@ class AdminShell extends StatefulWidget {
 
 class _AdminShellState extends State<AdminShell> {
   int _currentIndex = 0;
+  late final AppState _appState;
 
-  final List<Widget> _pages = [
-    const AdminDashboardPage(),
-    const AdminOrdersPage(),
-    const AdminStaffPage(),
-    const AdminReportPage(),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _appState = widget.appState;
+  }
+
+  void _refresh() => setState(() {});
+
+  void _addOrder(OrderData order) {
+    setState(() => _appState.orders.insert(0, order));
+  }
+
+  void _deleteOrder(OrderData order) {
+    setState(() => _appState.orders.remove(order));
+  }
+
+  void _addStaff(StaffData staff) {
+    setState(() => _appState.staffList.add(staff));
+  }
+
+  void _deleteStaff(StaffData staff) {
+    setState(() => _appState.staffList.remove(staff));
+  }
+
+  void _updateStaff(StaffData oldStaff, StaffData newStaff) {
+    setState(() {
+      final idx = _appState.staffList.indexOf(oldStaff);
+      if (idx != -1) _appState.staffList[idx] = newStaff;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isPhone = screenWidth < 600;
-    final bool isTablet = screenWidth >= 600 && screenWidth < 1024;
+
+    final List<Widget> pages = [
+      AdminDashboardPage(
+        appState: _appState,
+        onRefresh: _refresh,
+      ),
+      AdminOrdersPage(
+        appState: _appState,
+        onAddOrder: _addOrder,
+        onRefresh: _refresh,
+        onDeleteOrder: _deleteOrder,
+      ),
+      AdminStaffPage(
+        appState: _appState,
+        onAddStaff: _addStaff,
+        onDeleteStaff: _deleteStaff,
+        onUpdateStaff: _updateStaff,
+      ),
+      AdminReportPage(
+        appState: _appState,
+      ),
+    ];
 
     return Scaffold(
       backgroundColor: const Color(0xFFFBFDFF),
@@ -34,34 +83,21 @@ class _AdminShellState extends State<AdminShell> {
         children: [
           IndexedStack(
             index: _currentIndex,
-            children: _pages,
+            children: pages,
           ),
           // Floating Bottom Nav
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
-            child: _buildBottomNav(isPhone, isTablet),
+            child: _buildBottomNav(isPhone),
           ),
-          // FAB only for Orders page or others if needed
-          if (_currentIndex == 1)
-            Positioned(
-              right: 24,
-              bottom: 100, // Above nav
-              child: FloatingActionButton(
-                onPressed: () {},
-                backgroundColor: const Color(0xFF0D47A1),
-                elevation: 8,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                child: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 28),
-              ),
-            ),
         ],
       ),
     );
   }
 
-  Widget _buildBottomNav(bool isPhone, bool isTablet) {
+  Widget _buildBottomNav(bool isPhone) {
     return Center(
       child: Container(
         margin: EdgeInsets.only(

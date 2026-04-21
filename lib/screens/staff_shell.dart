@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import '../widgets/main_layout.dart';
+import '../models/app_data.dart';
 import 'staff_dashboard_view.dart';
 import 'scan_barcode_view.dart';
 import 'pesanan_view.dart';
 
 class StaffShell extends StatefulWidget {
-  const StaffShell({super.key});
+  final AppState appState;
+
+  const StaffShell({super.key, required this.appState});
 
   @override
   State<StaffShell> createState() => _StaffShellState();
@@ -26,16 +29,18 @@ class _StaffShellState extends State<StaffShell> {
     }
   }
 
+  void _refresh() => setState(() {});
+
   Widget _buildBody() {
     switch (_activeLabel) {
       case 'Dashboard':
-        return const StaffDashboardView();
+        return StaffDashboardView(appState: widget.appState, onRefresh: _refresh);
       case 'Pesanan':
-        return const PesananView();
+        return PesananView(appState: widget.appState, onRefresh: _refresh);
       case 'Scan Barcode':
-        return const ScanBarcodeView();
+        return ScanBarcodeView(appState: widget.appState, onRefresh: _refresh);
       default:
-        return const StaffDashboardView();
+        return StaffDashboardView(appState: widget.appState, onRefresh: _refresh);
     }
   }
 

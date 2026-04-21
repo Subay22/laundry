@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'screens/login_page.dart';
 import 'screens/staff_shell.dart';
 import 'screens/admin_shell.dart';
+import 'models/app_data.dart';
 
-void main() {
+final AppState globalAppState = AppState.createDefault();
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('id_ID', null);
   runApp(const LaundryKuApp());
 }
 
@@ -59,9 +65,10 @@ class LaundryKuApp extends StatelessWidget {
       initialRoute: '/',
       routes: {
         '/': (context) => const LoginPage(),
-        '/dashboard': (context) => const StaffShell(),
-        '/admin': (context) => const AdminShell(),
+        '/dashboard': (context) => StaffShell(appState: globalAppState),
+        '/admin': (context) => AdminShell(appState: globalAppState),
       },
     );
   }
 }
+
